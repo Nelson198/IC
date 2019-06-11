@@ -1,0 +1,7 @@
+nu X . ([true*]<true>true) && X
+
+nu X . ([true*][request_sent] (mu Y . <accepted || refused>true || [!(accepted || refused)]Y)) && X
+
+nu X . (forall value:Real . [citizen_pay(value).use_service]false) && X
+
+nu X . (forall v1, v2, v3:Real . [coop_pay(v1)][(agency_paid(v2) || citizen_paid(v3))]false) && X

@@ -1,0 +1,67 @@
+sort Service = struct meal | transport;
+
+act
+message_received: Real # Real; message_sent: Real # Real; message: Real # Real;
+request_received; request_sent; request;
+refused_received; refused_sent; refused;
+accepted_sent; accepted_received; accepted;
+coop_fees: Real; coop_paid: Real; coop_pay: Real;
+agency_paid: Real; agency_pay: Real; payment_agency: Real;
+citizen_paid: Real; citizen_pay: Real; payment_citizen: Real;
+question_received; question_sent; question;
+info_received: Service # Int; info_sent: Service # Int; info: Service # Int;
+completed_agency; completed_bank; completed;
+value_receivedA: Real; value_sentA: Real; priceA: Real;
+value_receivedC: Real; value_sentC: Real; priceC: Real;
+use_service; provide_service; service;
+tick; done;
+send_order_meal: Int; receive_order_meal: Int; send_meal: Int;
+send_order_transport: Int; receive_order_transport: Int; send_transport: Int;
+
+proc Bank =
+    sum valueA: Real . sum valueC: Real . message_received(valueA, valueC) . value_sentA(valueA) . value_sentC(valueC) . 
+    agency_paid(valueA) . citizen_paid(valueC) . coop_pay(valueA + valueC) . completed_bank . Bank;
+
+proc Citizen(s: Service, time: Int) =
+    request_sent . question_received . info_sent(s, time) .
+    ((accepted_received . use_service . sum value:Real . value_receivedC(value) . citizen_pay(value)) + refused_received) . Citizen(s, time);
+
+proc Agency =
+    request_received . question_sent . sum service: Service . sum time: Int . info_received(service, time) .
+        ((service == transport) ->
+            (accepted_sent . send_order_transport(time) . (sum value:Real . value_receivedA(value) . agency_pay(value)) . completed_agency)
+        <> ((service == meal) ->
+            (accepted_sent . send_order_meal(time) . (sum value:Real . value_receivedA(value) . agency_pay(value)) . completed_agency)
+        <> refused_sent)
+        ) . Agency;
+
+proc Transport(valueA: Real, valueC: Real) =
+    sum time:Int . receive_order_transport(time) . provide_service . PassTime(time) . message_sent(valueA, valueC) . coop_paid(valueA + valueC) . Transport(valueA, valueC);
+
+proc Meal(valueA: Real, valueC: Real) = 
+    sum time:Int . receive_order_meal(time) . provide_service . PassTime(time) . message_sent(valueA, valueC) . coop_paid(valueA + valueC) . Meal(valueA, valueC);
+
+proc PassTime(time: Int) =
+    (time > 0) -> tick . PassTime(time-1) 
+    <> done;
+
+init
+    allow({payment_agency, payment_citizen, coop_fees, message, request, refused, accepted, service, completed, question, info, priceC, priceA, send_meal, send_transport, done, tick},
+        comm({agency_pay | agency_paid -> payment_agency,
+              citizen_pay | citizen_paid -> payment_citizen,
+              coop_pay | coop_paid -> coop_fees,
+              message_received | message_sent -> message,
+              request_received | request_sent -> request,
+              refused_received | refused_sent -> refused,
+              accepted_received | accepted_sent -> accepted,
+              use_service | provide_service -> service, 
+              completed_agency | completed_bank -> completed,
+              question_received | question_sent -> question,
+              info_received | info_sent -> info, 
+              value_sentC | value_receivedC -> priceC,
+              value_sentA | value_receivedA -> priceA,
+              receive_order_meal | send_order_meal -> send_meal,
+              receive_order_transport | send_order_transport -> send_transport},
+            Citizen(meal, 17) || Citizen(transport, 12) || Citizen(meal, 11) || Citizen(meal, 5) ||
+            Agency || Bank || Transport(70/3, 20/3) || Meal(70/3, 5))
+        );
